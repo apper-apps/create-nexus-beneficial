@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
+import { AuthContext } from "../../App";
 import ApperIcon from "@/components/ApperIcon";
 import Button from "@/components/atoms/Button";
 import GlobalSearch from "@/components/organisms/GlobalSearch";
@@ -43,8 +44,8 @@ const [showGlobalSearch, setShowGlobalSearch] = useState(false);
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => {
-              const { logout } = require('react').useContext(require('../../App').AuthContext);
+onClick={() => {
+              const { logout } = useContext(AuthContext);
               logout();
             }}
             className="h-10 px-3 text-slate-300 hover:text-white"
