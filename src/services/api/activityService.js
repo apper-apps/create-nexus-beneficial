@@ -1,6 +1,11 @@
-import activitiesData from "@/services/mockData/activities.json";
+const { ApperClient } = window.ApperSDK;
 
-let activities = [...activitiesData];
+const apperClient = new ApperClient({
+  apperProjectId: import.meta.env.VITE_APPER_PROJECT_ID,
+  apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
+});
+
+// Mock tasks for now since activities manage both activities and tasks
 let tasks = [
   {
     Id: 1,
@@ -31,63 +36,133 @@ let tasks = [
     dueDate: "2024-01-15T09:00:00Z",
     priority: "medium",
     status: "pending"
-  },
-  {
-    Id: 4,
-    contactId: 4,
-    type: "follow-up",
-    title: "Check on contract status",
-    description: "Follow up on contract review progress",
-    dueDate: "2024-01-18T16:00:00Z",
-    priority: "medium",
-    status: "pending"
-  },
-  {
-    Id: 5,
-    contactId: 5,
-    type: "call",
-    title: "Technical architecture review",
-    description: "Review proposed technical architecture with client team",
-    dueDate: "2024-01-14T13:00:00Z",
-    priority: "high",
-    status: "pending"
   }
 ];
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const activityService = {
   async getAll() {
-    await delay(200);
-    return [...activities];
+    try {
+      const params = {
+        fields: [
+          { field: { Name: "Name" } },
+          { field: { Name: "contact_id_c" } },
+          { field: { Name: "type_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "date_c" } },
+          { field: { Name: "outcome_c" } },
+          { field: { Name: "next_steps_c" } },
+          { field: { Name: "Tags" } }
+        ]
+      };
+
+      const response = await apperClient.fetchRecords("activity_c", params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        return [];
+      }
+
+      return response.data || [];
+    } catch (error) {
+      console.error("Error fetching activities:", error?.response?.data?.message || error);
+      return [];
+    }
   },
 
   async getTasks() {
-    await delay(200);
+    // Return mock tasks sorted by due date
     return [...tasks].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   },
 
   async getByContactId(contactId) {
-    await delay(250);
-    return activities
-      .filter(activity => activity.contactId === parseInt(contactId))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    try {
+      const params = {
+        fields: [
+          { field: { Name: "Name" } },
+          { field: { Name: "contact_id_c" } },
+          { field: { Name: "type_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "date_c" } },
+          { field: { Name: "outcome_c" } },
+          { field: { Name: "next_steps_c" } }
+        ],
+        where: [
+          {
+            FieldName: "contact_id_c",
+            Operator: "EqualTo",
+            Values: [parseInt(contactId)],
+            Include: true
+          }
+        ],
+        orderBy: [
+          {
+            fieldName: "date_c",
+            sorttype: "DESC"
+          }
+        ]
+      };
+
+      const response = await apperClient.fetchRecords("activity_c", params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        return [];
+      }
+
+      return response.data || [];
+    } catch (error) {
+      console.error("Error fetching activities by contact:", error?.response?.data?.message || error);
+      return [];
+    }
   },
 
   async create(activityData) {
-    await delay(300);
-    const newActivity = {
-      ...activityData,
-      Id: Math.max(...activities.map(a => a.Id), 0) + 1,
-      contactId: parseInt(activityData.contactId),
-      date: new Date().toISOString()
-    };
-    activities.unshift(newActivity);
-    return { ...newActivity };
+    try {
+      // Only include updateable fields
+      const updateableData = {
+        Name: activityData.description || activityData.Name || 'Activity',
+        contact_id_c: parseInt(activityData.contactId || activityData.contact_id_c),
+        type_c: activityData.type || activityData.type_c,
+        description_c: activityData.description || activityData.description_c,
+        date_c: new Date().toISOString(),
+        outcome_c: activityData.outcome || activityData.outcome_c,
+        next_steps_c: activityData.nextSteps || activityData.next_steps_c
+      };
+
+      const params = {
+        records: [updateableData]
+      };
+
+      const response = await apperClient.createRecord("activity_c", params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        throw new Error(response.message);
+      }
+
+      if (response.results) {
+        const failedRecords = response.results.filter(result => !result.success);
+        
+        if (failedRecords.length > 0) {
+          console.error(`Failed to create activity records:${JSON.stringify(failedRecords)}`);
+          failedRecords.forEach(record => {
+            if (record.message) throw new Error(record.message);
+          });
+        }
+
+        const successfulRecords = response.results.filter(result => result.success);
+        return successfulRecords[0]?.data || null;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error creating activity:", error?.response?.data?.message || error);
+      throw error;
+    }
   },
 
   async createTask(taskData) {
-    await delay(300);
+    // Add task to mock tasks array
     const newTask = {
       ...taskData,
       Id: Math.max(...tasks.map(t => t.Id), 0) + 1,
@@ -100,51 +175,54 @@ export const activityService = {
   },
 
   async completeTask(taskId, completionData) {
-    await delay(300);
-    const taskIndex = tasks.findIndex(t => t.Id === parseInt(taskId));
-    if (taskIndex === -1) {
-      throw new Error("Task not found");
-    }
+    try {
+      const taskIndex = tasks.findIndex(t => t.Id === parseInt(taskId));
+      if (taskIndex === -1) {
+        throw new Error("Task not found");
+      }
 
-    const task = tasks[taskIndex];
-    
-    // Create activity from completed task
-    const completedActivity = {
-      Id: Math.max(...activities.map(a => a.Id), 0) + 1,
-      contactId: task.contactId,
-      type: task.type,
-      description: task.description,
-      outcome: completionData.outcome,
-      nextSteps: completionData.nextSteps,
-      date: new Date().toISOString()
-    };
-    
-    activities.unshift(completedActivity);
-
-    // Create follow-up task if specified
-    if (completionData.followUpDate && completionData.followUpType) {
-      const followUpTask = {
-        Id: Math.max(...tasks.map(t => t.Id), 0) + 1,
-        contactId: task.contactId,
-        type: completionData.followUpType,
-        title: `Follow-up: ${task.title}`,
-        description: completionData.nextSteps || "Follow-up task",
-        dueDate: completionData.followUpDate,
-        priority: task.priority,
-        status: "pending",
-        createdDate: new Date().toISOString()
+      const task = tasks[taskIndex];
+      
+      // Create activity from completed task
+      const activityData = {
+        Name: task.title,
+        contact_id_c: task.contactId,
+        type_c: task.type,
+        description_c: task.description,
+        outcome_c: completionData.outcome,
+        next_steps_c: completionData.nextSteps,
+        date_c: new Date().toISOString()
       };
-      tasks.unshift(followUpTask);
+
+      const completedActivity = await this.create(activityData);
+
+      // Create follow-up task if specified
+      if (completionData.followUpDate && completionData.followUpType) {
+        const followUpTask = {
+          Id: Math.max(...tasks.map(t => t.Id), 0) + 1,
+          contactId: task.contactId,
+          type: completionData.followUpType,
+          title: `Follow-up: ${task.title}`,
+          description: completionData.nextSteps || "Follow-up task",
+          dueDate: completionData.followUpDate,
+          priority: task.priority,
+          status: "pending",
+          createdDate: new Date().toISOString()
+        };
+        tasks.unshift(followUpTask);
+      }
+
+      // Remove completed task
+      tasks.splice(taskIndex, 1);
+
+      return { activity: completedActivity, task: null };
+    } catch (error) {
+      console.error("Error completing task:", error?.response?.data?.message || error);
+      throw error;
     }
-
-    // Remove completed task
-    tasks.splice(taskIndex, 1);
-
-    return { activity: completedActivity, task: null };
   },
 
   async updateTask(taskId, updateData) {
-    await delay(300);
     const taskIndex = tasks.findIndex(t => t.Id === parseInt(taskId));
     if (taskIndex === -1) {
       throw new Error("Task not found");
@@ -161,7 +239,6 @@ export const activityService = {
   },
 
   async deleteTask(taskId) {
-    await delay(200);
     const taskIndex = tasks.findIndex(t => t.Id === parseInt(taskId));
     if (taskIndex === -1) {
       throw new Error("Task not found");
@@ -172,21 +249,50 @@ export const activityService = {
   },
 
   async getRecent(limit = 10) {
-    await delay(200);
-    return activities
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, limit);
+    try {
+      const params = {
+        fields: [
+          { field: { Name: "Name" } },
+          { field: { Name: "contact_id_c" } },
+          { field: { Name: "type_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "date_c" } },
+          { field: { Name: "outcome_c" } },
+          { field: { Name: "next_steps_c" } }
+        ],
+        orderBy: [
+          {
+            fieldName: "date_c",
+            sorttype: "DESC"
+          }
+        ],
+        pagingInfo: {
+          limit: limit,
+          offset: 0
+        }
+      };
+
+      const response = await apperClient.fetchRecords("activity_c", params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        return [];
+      }
+
+      return response.data || [];
+    } catch (error) {
+      console.error("Error fetching recent activities:", error?.response?.data?.message || error);
+      return [];
+    }
   },
 
   async getTasksByContactId(contactId) {
-    await delay(250);
     return tasks
       .filter(task => task.contactId === parseInt(contactId))
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   },
 
-async getOverdueTasks() {
-    await delay(200);
+  async getOverdueTasks() {
     const now = new Date();
     return tasks
       .filter(task => new Date(task.dueDate) < now)
@@ -194,15 +300,79 @@ async getOverdueTasks() {
   },
 
   async search(query) {
-    await delay(200);
-    if (!query.trim()) return [...activities];
-    
-    const searchTerm = query.toLowerCase();
-    return activities.filter(activity => 
-      activity.description?.toLowerCase().includes(searchTerm) ||
-      activity.outcome?.toLowerCase().includes(searchTerm) ||
-      activity.nextSteps?.toLowerCase().includes(searchTerm) ||
-      activity.type.toLowerCase().includes(searchTerm)
-    );
+    try {
+      if (!query.trim()) {
+        return await this.getAll();
+      }
+
+      const params = {
+        fields: [
+          { field: { Name: "Name" } },
+          { field: { Name: "type_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "outcome_c" } },
+          { field: { Name: "next_steps_c" } }
+        ],
+        whereGroups: [
+          {
+            operator: "OR",
+            subGroups: [
+              {
+                conditions: [
+                  {
+                    fieldName: "description_c",
+                    operator: "Contains",
+                    values: [query]
+                  }
+                ],
+                operator: "OR"
+              },
+              {
+                conditions: [
+                  {
+                    fieldName: "outcome_c",
+                    operator: "Contains",
+                    values: [query]
+                  }
+                ],
+                operator: "OR"
+              },
+              {
+                conditions: [
+                  {
+                    fieldName: "next_steps_c",
+                    operator: "Contains",
+                    values: [query]
+                  }
+                ],
+                operator: "OR"
+              },
+              {
+                conditions: [
+                  {
+                    fieldName: "type_c",
+                    operator: "Contains",
+                    values: [query]
+                  }
+                ],
+                operator: "OR"
+              }
+            ]
+          }
+        ]
+      };
+
+      const response = await apperClient.fetchRecords("activity_c", params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        return [];
+      }
+
+      return response.data || [];
+    } catch (error) {
+      console.error("Error searching activities:", error?.response?.data?.message || error);
+      return [];
+    }
   }
 };
