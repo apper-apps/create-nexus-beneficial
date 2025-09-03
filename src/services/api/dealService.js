@@ -283,5 +283,3 @@ export const dealService = {
     }
   }
 };
-
-export { dealService };

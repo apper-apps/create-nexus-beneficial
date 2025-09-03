@@ -4,7 +4,8 @@ import ApperIcon from "@/components/ApperIcon";
 import Button from "@/components/atoms/Button";
 import GlobalSearch from "@/components/organisms/GlobalSearch";
 const Header = ({ onMenuClick }) => {
-const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const { logout } = useContext(AuthContext);
 
   // Global keyboard shortcut handler
   useEffect(() => {
@@ -45,7 +46,6 @@ const [showGlobalSearch, setShowGlobalSearch] = useState(false);
             variant="ghost" 
             size="sm" 
 onClick={() => {
-              const { logout } = useContext(AuthContext);
               logout();
             }}
             className="h-10 px-3 text-slate-300 hover:text-white"
